@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "stages": {
+    "resource_finder": {
+      "success": true,
+      "completion_marker": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/.resource_finder_complete",
+      "outputs": {
+        "literature_review": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/literature_review.md",
+        "resources_catalog": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/resources.md",
+        "papers_dir": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/papers",
+        "datasets_dir": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/datasets",
+        "code_dir": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/code"
+      },
+      "log_file": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/logs/resource_finder_gemini.log",
+      "transcript_file": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/logs/resource_finder_gemini_transcript.jsonl",
+      "elapsed_time": 453.7364978790283
+    },
+    "experiment_runner": {
+      "success": true,
+      "return_code": 0,
+      "elapsed_time": 4001.6396267414093,
+      "log_file": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/logs/execution_gemini.log",
+      "transcript_file": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1/logs/execution_gemini_transcript.jsonl"
+    }
+  },
+  "work_dir": "/content/drive/MyDrive/NeuriCo-main/NeuriCo-main/workspaces/using_inductive_moment_matchin_20260515_152706_e5fc11b1"
+}

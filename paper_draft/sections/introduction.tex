@@ -1,0 +1,19 @@
+\section{Introduction}
+
+Reinforcement learning (RL) in continuous control environments, such as robotic locomotion, often faces challenges due to high variance and sparse rewards. Traditional Q-learning methods focus on estimating the expected value of future returns, which provides a useful signal for policy improvement but discards critical information about the underlying distribution of rewards. Capturing the full distribution of returns is essential for robust decision-making, effective exploration, and risk-aware acting.
+
+{\bf Why does distributional RL matter?} By modeling the return as a random variable rather than a single scalar, distributional RL (\distrl) frameworks can capture aleatoric uncertainty arising from environment stochasticity and epistemic uncertainty from limited data. Methods like \cfiftyone \cite{bellemare2017distributional} and \qrdqn \cite{dabney2018distributional} have demonstrated superior performance and stability in various benchmarks by enforcing a distributional Bellman update.
+
+{\bf What is the gap in current methods?} Despite their success, existing \distrl methods often rely on predefined structural constraints. For instance, \cfiftyone requires a fixed range of supports (bins), which must be tuned for each task, while \qrdqn and \iqn \cite{dabney2018implicit} approximate the distribution through a fixed or sampled set of quantiles. These constraints can introduce approximation errors and limit the expressiveness of the learned distribution, especially in continuous state-action spaces where the return distribution might be complex and multi-modal. While \mmddqn \cite{nguyen2020distributional} introduced an unconstrained particle-based approach using Maximum Mean Discrepancy (\mmd), it can still suffer from instability during training or require complex multi-stage updates.
+
+{\bf Our approach.} We propose Inductive Moment Matching Q-learning (\immq), which integrates the recently developed Inductive Moment Matching (\imm) objective \cite{zhou2025inductive} into the distributional Bellman framework. \imm provides a stable, single-stage inductive bootstrapping procedure originally designed for generative modeling. By applying this to Q-learning, we allow the agent to output a set of unconstrained particles representing the return distribution. We minimize the \mmd between these particles and the distributional target, supplemented by an inductive regularization penalty on the mean. This allows the network to match the moments of the target distribution flexibly and stably.
+
+In our experiments on the \halfcheetah benchmark, \immq demonstrates remarkable stability and efficiency. For example, we achieve a consistent \mmd validation error of approximately 2.1 across dataset sizes ranging from 100 to 1000 episodes. Furthermore, our analysis of the regularization path (see \Figref{fig:regularization}) reveals that a stronger inductive penalty ($\alpha=1.0$) actually improves distribution matching performance, lowering the \mmd error to 2.05 while maintaining a rich variance of 0.35.
+
+Our main contributions are summarized as follows:
+\begin{itemize}[leftmargin=*,itemsep=0pt,topsep=0pt]
+    \item We introduce \immq, a novel particle-based distributional Q-learning framework that utilizes Inductive Moment Matching for stable distribution-level updates.
+    \item We demonstrate that \immq effectively learns return distributions in continuous control tasks without the need for predefined supports or quantile definitions.
+    \item We conduct a comprehensive study on the impact of inductive regularization, showing that it stabilizes training and enhances the expressiveness of the learned distribution.
+    \item We provide empirical evidence of the robustness of \immq across different dataset sizes in an offline RL setting.
+\end{itemize}

@@ -1,0 +1,488 @@
+You are an academic paper writer. Generate a complete NEURIPS style paper
+based on the experiment results provided.
+
+════════════════════════════════════════════════════════════════════════════════
+                         IMPORTANT: BEFORE YOU START
+════════════════════════════════════════════════════════════════════════════════
+
+Before writing any content, you MUST complete these steps:
+
+1. READ THE SKILL: Review the paper-writer skill at .gemini/skills/paper-writer/SKILL.md
+2. READ THE STYLE GUIDE: Study templates/paper_writing/lab_style_guide.md carefully
+3. REVIEW EXAMPLES: Browse paper_examples/ for formatting and language patterns:
+   - Look at sections/1.introduction.tex for language style
+   - Look at tables/*.tex for table formatting
+   - Look at commands/*.tex for macro usage
+4. VERIFY COMMAND TEMPLATES: Command templates (math.tex, general.tex, macros.tex) are pre-copied to paper_draft/commands/
+
+CRITICAL: Reference example papers for FORMATTING and LANGUAGE STYLE only.
+Do NOT copy content, phrasing, or narrative structure from the example papers.
+The examples are in a different research domain - focus only on presentation style.
+
+════════════════════════════════════════════════════════════════════════════════
+                            EXPERIMENT REPORT
+════════════════════════════════════════════════════════════════════════════════
+
+# Research Report: Using Inductive Moment Matching for Q-learning
+
+## 1. Executive Summary
+This research investigates the application of Inductive Moment Matching (IMM) to Q-learning within continuous control environments. We hypothesized that matching the unrestricted moments of the return distribution via Maximum Mean Discrepancy (MMD) would lead to stable learning and effective distribution modeling without the rigid constraints of traditional Distributional RL methods like C51. Our empirical results on the offline HalfCheetah dataset confirm that IMM-Q successfully learns continuous target distributions and remains robust across different regularization strengths and dataset sizes.
+
+## 2. Research Question & Motivation
+**Research Question:** Can Inductive Moment Matching be effectively applied to Q-learning to improve sample efficiency and learning stability in continuous control environments?
+
+**Motivation:** Traditional Q-learning estimates only the expected return, losing critical information about the underlying variance and distribution of rewards. Distributional RL addresses this, but standard methods require defining arbitrary supports (categories or quantiles). Inspired by recent generative modeling advancements, Inductive Moment Matching offers an unstructured, stable way to match distributions using MMD across single-stage iterations. This research fills the gap by applying this continuous framework directly to the distributional Bellman operator.
+
+## 3. Methodology
+
+### Data Construction
+- **Dataset:** `halfcheetah_medium.hdf5` from the D4RL benchmark.
+- **Task:** Offline Reinforcement Learning policy evaluation.
+- **Data preprocessing:** Flattened arrays from the HDF5 file were chunked into valid transitions $(s, a, r, s', done)$. Transitions crossing episode boundaries were masked.
+- **Splits:** 80% Training, 20% Validation split over the selected number of episodes (100, 500, 1000).
+
+### Implementation Details
+- **Baseline Models:** Standard Expected Q-Learning (Continuous DQN style) predicting a single scalar. It minimizes Mean Squared Error against the Temporal Difference (TD) target.
+- **Proposed Method (IMM-Q):** The IMM Q-Network outputs $N=32$ unconstrained particles representing the return distribution. We minimize the MMD (using a sum of multiple RBF kernels: $\sigma \in \{0.1, 1.0, 10.0\}$) between the predicted particles and the target particles shifted by the reward. We also apply an $L_2$ regularization penalty on the mean with weight $\alpha$.
+- **Training Protocol:** Models were trained for 20 epochs using the Adam optimizer with a learning rate of $3 \times 10^{-4}$ and soft target updates ($\tau = 0.005$).
+
+## 4. Results
+
+### Sample Efficiency (Varying Dataset Sizes)
+At $\alpha=0.1$, we observed the following behavior on the validation set at the end of training:
+
+| Dataset Size (Episodes) | Standard Q TD Error (MSE) | IMM-Q MMD Error | IMM-Q Variance |
+|-------------------------|---------------------------|-----------------|----------------|
+| 100                     | 25.30                     | 2.02            | 0.37           |
+| 500                     | 24.65                     | 2.28            | 0.19           |
+| 1000                    | 24.60                     | 2.20            | 0.29           |
+
+*Standard Q error remains stable across sizes. IMM-Q consistently minimizes the MMD distance around 2.0 - 2.2, showing stable distribution matching.*
+
+### Regularization Path (Varying Alpha at 500 Episodes)
+We measured the impact of the inductive regularization penalty ($\alpha$) which pulls the mean of the predicted distribution toward the mean of the target distribution:
+
+| Alpha ($\alpha$) | Validation MMD Error | Predicted Distribution Variance |
+|------------------|----------------------|---------------------------------|
+| 0.00             | 2.19                 | 0.26                            |
+| 0.01             | 2.21                 | 0.24                            |
+| 0.10             | 2.28                 | 0.19                            |
+| 0.50             | 2.11                 | 0.33                            |
+| 1.00             | 2.05                 | 0.35                            |
+
+*(Visualizations are available in the `figures/` directory).*
+
+## 5. Analysis & Discussion
+The results support the hypothesis that Inductive Moment Matching can be stably integrated into Q-learning. 
+1. **Convergence and Stability:** IMM-Q successfully converged in all scenarios. The training and validation curves (see `figures/training_validation_curves.png`) show a smooth decline in MMD loss, indicating that matching unrestricted particles via multiple RBF kernels does not collapse or explode, which is often a risk in unstructured Distributional RL.
+2. **Impact of Regularization:** The regularization path (`figures/performance_vs_regularization.png`) reveals an interesting dynamic. Adding a strong penalty on the mean ($\alpha=0.5, 1.0$) slightly improved the pure MMD error (lowering it to 2.05). Furthermore, it did not cause the variance of the particles to collapse; in fact, the variance increased slightly (0.35 at $\alpha=1.0$ vs 0.26 at $\alpha=0.0$). This suggests the inductive penalty on the first moment allows the MMD to focus on matching the higher-order shape of the distribution, leading to a richer representation.
+
+## 6. Limitations
+- **Offline Simplification:** To circumvent environment simulation issues (`mujoco_py` dependencies), we evaluated the models through Offline Policy Evaluation rather than full online interactions. The true test of sample efficiency in RL lies in the exploration-exploitation loop, which was not explicitly tested here.
+- **Computational Cost:** MMD is $O(N^2 \times M^2)$. We limited the distribution to $N=32$ particles, which was computationally manageable but might under-represent highly complex multi-modal returns compared to larger sample sizes.
+
+## 7. Conclusions & Next Steps
+Inductive Moment Matching provides a highly stable and flexible framework for Distributional Q-learning. By outputting unrestricted particles and minimizing the MMD to the Bellman target, the IMM-Q agent effectively learns the return distribution without predefined constraints.
+
+**Next Steps:**
+- Integrate IMM-Q into a full online actor-critic architecture (e.g., SAC or DDPG) to measure online sample efficiency and final return in the live Gym environment.
+- Explore Thompson sampling over the learned particles to drive uncertainty-aware exploration during online training.
+
+## References
+1. Zhou, L., Ermon, S., & Song, J. (2025). Inductive Moment Matching. *arXiv preprint*.
+2. Nguyen, T. T., Gupta, S., & Venkatesh, S. (2020). Distributional Reinforcement Learning via Moment Matching. *AAAI*.
+3. Bellemare, M. G., Dabney, W., & Munos, R. (2017). A Distributional Perspective on Reinforcement Learning. *ICML*.
+
+════════════════════════════════════════════════════════════════════════════════
+                            RESEARCH PLAN
+════════════════════════════════════════════════════════════════════════════════
+
+## Motivation & Novelty Assessment
+
+### Why This Research Matters
+Reinforcement learning often struggles with high variance and instability in complex continuous control tasks like HalfCheetah. Traditional expected Q-learning minimizes the mean squared Bellman error but loses information about the underlying distribution of returns, which is crucial for robust decision-making, exploration, and handling uncertainty.
+
+### Gap in Existing Work
+Distributional RL methods (e.g., C51, QR-DQN) require defining restrictive support statistics, such as discrete categories or predefined quantiles, which can introduce approximation errors and complexity in continuous environments. While Moment Matching DQN (MMD-DQN) via MMD has been explored for unstructured distributional RL, combining it with the newer single-stage "Inductive Moment Matching" (IMM) approach (Zhou et al., 2025) remains unexplored. IMM has shown stability in generative modeling and offers an inductive way to perform matching across time steps without heavy distillation processes. 
+
+### Our Novel Contribution
+We propose Inductive Moment Matching Q-learning (IMM-Q), which applies the recent IMM framework to the distributional Bellman operator. We match the moments of the predicted action-value distribution to the Bellman target distribution using MMD via inductive bootstrapping.
+
+### Experiment Justification
+- **Experiment 1 (Baseline Verification):** Training standard Q-learning and distributional baselines (e.g., standard MMD-DQN or QR-DQN) on HalfCheetah trajectories to establish a performance floor and ensure the environment works.
+- **Experiment 2 (IMM-Q Evaluation):** Training our proposed IMM-Q method on varying amounts of trajectories (100, 500, 1000) and comparing sample efficiency, distribution matching stability (MMD loss), and return performance against the baselines.
+- **Experiment 3 (Regularization Path):** Evaluating IMM-Q performance against different regularization strengths (alpha) to understand its robustness and to provide the required regularizer path visualizations.
+
+---
+
+## Research Question
+Can Inductive Moment Matching (IMM) be effectively integrated into the distributional Bellman update of Q-learning to improve sample efficiency, learning stability, and final performance in continuous control environments?
+
+## Background and Motivation
+Q-learning estimates the action-value function but can suffer from high variance and slow convergence. Distributional RL improves upon this by learning the full return distribution. Existing methods like QR-DQN or Categorical DQN impose structural constraints on the learned distribution. IMM provides a more flexible way to match unrestricted moments between the predicted distribution and the target distribution.
+
+## Hypothesis Decomposition
+1. **Convergence Rate:** IMM-Q will show faster convergence (higher rewards in fewer gradient steps) compared to baseline Q-learning.
+2. **Sample Efficiency:** IMM-Q will outperform standard methods when trained on small dataset sizes (e.g., 100 episodes).
+3. **Stability:** The moment matching loss will exhibit lower variance during training than standard temporal difference error.
+
+## Proposed Methodology
+
+### Approach
+A controlled comparison study utilizing offline continuous control data (HalfCheetah-v2). Since IMM requires matching continuous distributions, we will use a continuous Q-learning framework, parameterized via neural networks outputting samples (or parameters of a mixture), and update them using an MMD-based loss with inductive bootstrapping.
+
+### Experimental Steps
+1. **Initialize and collect/load trajectories:** We will use offline dataset trajectories (from `datasets/` via D4RL) to represent varying dataset sizes.
+2. **Implement baselines:** A standard Expected TD Q-learning (or DQN equivalent for continuous space) and an implicit/sample-based DistRL baseline (MMD-DQN or QR-DQN).
+3. **Implement IMM-Q:** Develop the Q-network to output a set of samples (or moments) and update them by minimizing the MMD to the Bellman target (reward + gamma * next_state_samples), utilizing an inductive moment matching regularizer/bootstrap.
+4. **Train and Evaluate:** Train models on subsets of data (100, 500, 1000 episodes). Track training loss and validation return.
+
+### Baselines
+- Temporal Difference Flow / standard Q-learning
+- MMD-DQN (Nguyen et al., 2020)
+- QR-DQN
+
+### Evaluation Metrics
+- **Mean Return (Evaluation):** Primary performance metric on held-out data/environment.
+- **MMD Loss:** To track distribution matching stability.
+- **Sample Efficiency:** Return achieved per dataset size.
+
+### Statistical Analysis Plan
+- Compute mean and standard deviation of evaluation returns across multiple seeds (e.g., 3-5).
+- Paired t-tests between IMM-Q and baselines.
+
+## Expected Outcomes
+- IMM-Q achieves higher returns on 100-episode datasets than standard Q-learning.
+- Training loss curves for IMM-Q are smoother due to the inductive moment matching stabilization.
+
+## Timeline and Milestones
+- **Setup (10 mins):** Environment, data loading, dependency installation.
+- **Implementation (60 mins):** Baseline and IMM-Q model implementation, training loop.
+- **Experimentation (60 mins):** Running training runs across dataset sizes and regularizations.
+- **Analysis (30 mins):** Statistical testing, generating plots.
+- **Documentation (20 mins):** Finalizing REPORT.md.
+
+## Potential Challenges
+- **Computational Cost:** MMD is $O(N^2)$ in the number of samples per state-action pair. We will mitigate this by keeping the sample set small (e.g., $N=32$ or $64$).
+- **Environment compatibility:** D4RL HalfCheetah-v2 offline dataset handling. Will need to parse the dataset correctly into transitions.
+
+## Success Criteria
+- Successful execution of IMM-Q and baselines without errors.
+- Generation of the required plots: (1) Training/val curves, (2) Regularization path, (3) Performance vs regularization strength.
+- A comprehensive REPORT.md documenting the findings and statistical comparisons.
+
+════════════════════════════════════════════════════════════════════════════════
+                          LITERATURE REVIEW
+════════════════════════════════════════════════════════════════════════════════
+
+# Literature Review: Using Inductive Moment Matching for Q-learning
+
+## Research Area Overview
+This research explores the intersection of **Inductive Moment Matching (IMM)** and **Distributional Reinforcement Learning**. The core idea is to leverage the stability and single-stage training properties of IMM to improve the learning of return distributions in Q-learning. Traditional distributional RL methods (like C51 or QR-DQN) often rely on predefined statistics (categories or quantiles), which can be restrictive. Recent work has proposed using Maximum Mean Discrepancy (MMD) to match unrestricted statistics (moments/samples). IMM offers a potentially more efficient "inductive" way to perform this matching across multiple time steps.
+
+## Key Papers
+
+### Paper 1: Inductive Moment Matching
+- **Authors**: Linqi Zhou, Stefano Ermon, Jiaming Song
+- **Year**: 2025
+- **Source**: arXiv (cs.LG) / PMLR 267
+- **Key Contribution**: Proposes IMM, a single-stage training procedure for generative models that learns a one-step sampler via inductive bootstrapping.
+- **Methodology**: Uses marginal-preserving interpolants and MMD-based objectives to ensure distribution-level convergence without needing distillation from a teacher model.
+- **Relevance to Our Research**: Provides the core "Inductive" and "Moment Matching" framework that we aim to apply to the Bellman operator in RL.
+
+### Paper 2: Distributional Reinforcement Learning via Moment Matching
+- **Authors**: Thanh Tang Nguyen, Sunil Gupta, Svetha Venkatesh
+- **Year**: 2020 (v3)
+- **Source**: AAAI 2021
+- **Key Contribution**: Formulates a distributional RL method that learns unrestricted statistics (deterministic samples) by matching moments using MMD.
+- **Methodology**: Minimizes the MMD between the current return distribution and the Bellman target distribution. Proves the contraction property of the distributional Bellman operator under MMD.
+- **Results**: Outperforms C51 and QR-DQN on Atari games.
+- **Relevance to Our Research**: Demonstrates that moment matching via MMD is a viable and powerful approach for distributional RL.
+
+### Paper 3: A Distributional Perspective on Reinforcement Learning
+- **Authors**: Marc G. Bellemare, Will Dabney, Rémi Munos
+- **Year**: 2017
+- **Source**: ICML 2017
+- **Key Contribution**: Introduces the concept of learning the full distribution of returns (Categorical DQN / C51) rather than just the expectation.
+- **Relevance**: Foundational paper for all distributional RL research.
+
+### Paper 4: Implicit Quantile Networks for Distributional Reinforcement Learning
+- **Authors**: Will Dabney, Georg Ostrovski, David Silver, Rémi Munos
+- **Year**: 2018
+- **Source**: ICML 2018
+- **Key Contribution**: Proposes IQN, which learns a quantile function using a re-parameterization trick, allowing for an implicit representation of the return distribution.
+- **Relevance**: A state-of-the-art baseline for distributional RL that uses implicit samples.
+
+## Common Methodologies
+- **Distributional Bellman Operator**: Updating the distribution $Z(s, a)$ instead of the scalar $Q(s, a)$.
+- **Maximum Mean Discrepancy (MMD)**: A kernel-based method to measure the distance between distributions, used in both Nguyen et al. (2020) and Zhou et al. (2025).
+- **Inductive Bootstrapping**: Using previous estimates (or intermediate time-steps) to guide the learning of the current distribution, a key feature of IMM.
+
+## Standard Baselines
+- **DQN**: Standard expected RL.
+- **C51**: Categorical Distributional RL.
+- **QR-DQN**: Quantile Regression DQN.
+- **IQN**: Implicit Quantile Networks.
+- **MMD-DQN**: (The method from Nguyen et al. 2020).
+
+## Evaluation Metrics
+- **Mean Episode Reward**: Standard RL performance.
+- **Sample Efficiency**: Learning speed (reward vs. steps).
+- **Calibration/Uncertainty**: How well the learned distribution captures true return variance.
+- **MMD**: As a measure of convergence between the learned and true distributions.
+
+## Datasets in the Literature
+- **Atari 2600**: Discrete action space benchmarks.
+- **Mujoco (HalfCheetah, Hopper, etc.)**: Continuous control benchmarks (relevant to the user's `half-cheetah-v2` mention).
+- **D4RL**: Offline RL datasets for Mujoco environments.
+
+## Gaps and Opportunities
+- **Stability of Moment Matching**: While MMD-DQN is powerful, combining it with IMM's "inductive" approach might provide better stability and faster convergence in complex continuous environments like HalfCheetah.
+- **Exploration**: Using the full distribution from IMM-RL to derive uncertainty-aware exploration policies (e.g., via Thompson Sampling or UCB on moments).
+
+## Recommendations for Our Experiment
+1. **Primary Dataset**: `half-cheetah-v2` (D4RL medium/expert datasets for offline, or online Gym environment).
+2. **Baseline Methods**: QR-DQN, IQN, and MMD-DQN.
+3. **Core Task**: Implement an "IMM-Q" agent that uses the Inductive Moment Matching objective to update its value distribution.
+4. **Metrics**: Reward curves, MMD to Bellman target, and uncertainty estimation accuracy.
+
+
+════════════════════════════════════════════════════════════════════════════════
+                          PAPER REQUIREMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+Generate a complete academic paper with the following structure:
+
+1. TITLE
+   - Clear, specific, informative
+   - Should convey main finding or contribution
+
+2. AUTHOR
+   - Use this exact author line in the \author{} block: NeuriCo
+
+3. ABSTRACT (150-250 words)
+   - Problem statement
+   - Approach
+   - Key results
+   - Significance
+
+4. INTRODUCTION
+   - Research problem and motivation
+   - Gap in existing work
+   - Our contribution (be specific)
+   - Paper organization
+
+5. RELATED WORK
+   - Organized by theme/approach
+   - Position our work relative to prior work
+   - Cite papers from literature review
+
+6. METHODOLOGY
+   - Clear description of approach
+   - Experimental setup
+   - Datasets used
+   - Evaluation metrics
+   - Baselines
+
+7. RESULTS
+   - Present results with tables and figures
+   - Statistical analysis
+   - Comparison to baselines
+   - Ablation studies (if applicable)
+
+8. DISCUSSION
+   - Interpretation of results
+   - Limitations
+   - Broader implications
+
+9. CONCLUSION
+   - Summary of contributions
+   - Key findings
+   - Future work
+
+10. REFERENCES
+   - BibTeX format
+   - All cited papers
+
+════════════════════════════════════════════════════════════════════════════════
+                          OUTPUT FORMAT
+════════════════════════════════════════════════════════════════════════════════
+
+Create a MODULAR LaTeX project with the following directory structure:
+
+paper_draft/
+├── main.tex              # Main file that imports all sections
+├── references.bib        # BibTeX references
+├── sections/
+│   ├── abstract.tex      # Abstract content
+│   ├── introduction.tex  # Introduction section
+│   ├── related_work.tex  # Related work section
+│   ├── methodology.tex   # Methodology section
+│   ├── results.tex       # Results section
+│   ├── discussion.tex    # Discussion section
+│   └── conclusion.tex    # Conclusion section
+├── figures/              # Directory for any generated figures
+├── tables/               # Directory for complex standalone tables
+└── appendix/             # Directory for appendix sections (if needed)
+
+INSTRUCTIONS:
+1. First, create the directory structure above (mkdir -p paper_draft/sections paper_draft/figures paper_draft/tables paper_draft/appendix)
+2. Write main.tex using the EXACT preamble for NEURIPS:
+
+   \documentclass{article}
+   \usepackage[final]{neurips_2025}  % NEURIPS style (neurips_2025.sty is in paper_draft/)
+   \usepackage[hidelinks]{hyperref}  % REQUIRED: clickable links
+   \usepackage{booktabs}  % REQUIRED: professional tables
+   \usepackage{graphicx}
+   \usepackage{amsmath,amssymb}
+
+   % Import command files
+   \input{commands/math}
+   \input{commands/general}
+   \input{commands/macros}
+
+   % Use this bibliography style:
+   \bibliographystyle{plainnat}
+
+   \author{NeuriCo}
+
+   - Use \input{sections/...} to include each section
+   - Use \bibliography{references} for references
+3. Write each section file with COMPLETE content (no placeholders)
+4. Each section file should include its \section{} command
+5. Write references.bib with all citations in BibTeX format
+6. After writing all files, compile the paper:
+   cd paper_draft && pdflatex -interaction=nonstopmode main.tex && bibtex main && pdflatex -interaction=nonstopmode main.tex && pdflatex -interaction=nonstopmode main.tex
+
+This modular structure allows humans to easily:
+- Edit individual sections without navigating a large file
+- Track changes per section
+- Reuse sections across different paper versions
+
+════════════════════════════════════════════════════════════════════════════════
+                          QUALITY REQUIREMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+- Academic tone throughout
+- All claims must be supported by data from the experiment report
+- Proper citations using \cite{} commands
+- Clear figures and tables with proper captions
+- NO placeholder text - every section must have real content
+- The paper MUST compile without errors
+- If compilation fails, debug and fix the LaTeX errors
+
+════════════════════════════════════════════════════════════════════════════════
+                          LAB WRITING STYLE
+════════════════════════════════════════════════════════════════════════════════
+
+Follow these lab-specific conventions to match our paper style:
+
+1. LANGUAGE STYLE:
+   - Use active voice: "We propose", "We examine", "We focus on"
+   - Be direct and confident: "Our main question is...", "We hypothesize that..."
+   - State things clearly and simply - prefer plain language over jargon
+   - Use bold questions as paragraph organizers: {\bf what is X?}
+   - Include specific quantitative claims: "8.97% over baseline"
+   - Avoid fancy wording: "utilize" → "use", "facilitate" → "help"
+
+2. INTRODUCTION STRUCTURE:
+   - Engaging hook (get to the point quickly)
+   - Problem importance
+   - Gap identification
+   - Your approach with method figure reference
+   - Quantitative preview of results
+   - Contribution bullets (3-4 items, action verbs)
+
+3. CONTRIBUTION LISTS:
+   \begin{itemize}[leftmargin=*,itemsep=0pt,topsep=0pt]
+       \item We propose...
+       \item We conduct...
+       \item We complement...
+   \end{itemize}
+
+4. MODULAR COMMANDS STRUCTURE:
+   Command templates are pre-copied to paper_draft/commands/:
+   - math.tex: Math notation macros
+   - general.tex: Formatting macros
+   - macros.tex: Project-specific term definitions (customize this for your paper)
+
+   In main.tex, include:
+   \input{commands/math}
+   \input{commands/general}
+   \input{commands/macros}
+
+5. REFERENCE CONVENTIONS:
+   Use reference macros from math.tex:
+   - \figref{fig:name} for "figure 1" (lowercase, in-sentence)
+   - \Figref{fig:name} for "Figure 1" (capitalized, start of sentence)
+   - \secref{sec:name} for "section 2"
+
+6. TEXT FORMATTING:
+   - Use \para{Header text} for bold paragraph headers
+   - Define method/dataset names with \textsc and \xspace:
+     \newcommand{\methodname}{\textsc{MethodName}\xspace}
+
+7. TABLE FORMATTING:
+   - Use booktabs package (no vertical lines)
+   - Use \resizebox{\textwidth}{!}{...} for wide tables
+   - Use @{} to remove padding at table edges
+   - Use \cmidrule(lr){x-y} for sub-headers
+   - Use \textsc{} for dataset/method names in headers
+   - Bold best results with {\bf ...}
+
+8. FIGURE FORMATTING:
+   - Use 0.32\textwidth for 3-column subfigures
+   - Use 0.95\linewidth for full-width figures
+   - Use \input{figures/legend} for shared legends
+   - Write self-contained captions explaining key observations
+
+9. RESULTS PRESENTATION:
+   - Define \increase and \decrease for colored arrows (green up, red down)
+   - Bold best results in tables
+   - Report confidence intervals when available
+
+10. ALGORITHM STYLING:
+    - Use algpseudocode with [noend]
+    - Use \triangleright for comments
+
+11. HYPERLINKS (REQUIRED):
+    - Always use \usepackage[hidelinks]{hyperref} or with colored links
+    - All citations, section refs, figure refs, table refs must be clickable
+    - This is essential for reader navigation
+
+════════════════════════════════════════════════════════════════════════════════
+                          WORKFLOW: REVIEW AND REFLECT
+════════════════════════════════════════════════════════════════════════════════
+
+Before calling finish, you MUST complete these review steps:
+
+1. REVIEW RESOURCES (at the start):
+   - Read .gemini/skills/paper-writer/SKILL.md for detailed guidance
+   - Study templates/paper_writing/lab_style_guide.md for style conventions
+   - Browse paper_examples/ for formatting and language patterns
+
+2. SELF-REFLECTION (before finishing):
+   After writing all sections, review your work against these criteria:
+
+   LANGUAGE CHECK:
+   - [ ] Is the writing clear and jargon-free?
+   - [ ] Are claims specific with quantitative support?
+   - [ ] Is active voice used throughout?
+
+   FORMATTING CHECK:
+   - [ ] Does main.tex include \input{commands/math}, \input{commands/general}, \input{commands/macros}?
+   - [ ] Is hyperref package included for clickable references?
+   - [ ] Do tables use booktabs (no vertical lines)?
+   - [ ] Are best results bolded in tables?
+   - [ ] Are figures/tables properly captioned?
+
+   STRUCTURE CHECK:
+   - [ ] Does introduction follow: hook → importance → gap → approach → preview → contributions?
+   - [ ] Are contribution bullets specific with action verbs?
+   - [ ] Does the paper compile without errors?
+
+3. FIX ISSUES:
+   - Address any issues found in the self-reflection
+   - Re-compile and verify the PDF looks correct
+
+Only after completing this review should you consider the paper finished.
